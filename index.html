@@ -296,4 +296,148 @@ let cur = roll();
 const plateHTML = p => `
   <div class="plate" aria-label="${REGIONS[p.region].label}: ${p.main} ${p.side}">
     <div class="main">${p.main}</div>
-    <div class="side
+    <div class="side ${p.region}">${p.side}</div>
+  </div>`;
+const tagsHTML = tags => (tags.length
+  ? tags.map(t => `<span class="tag hit">${NAMES[t]}</span>`).join('')
+  : '<span class="tag">Без особенностей</span>');
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function renderAll() {
+  document.getElementById('wallets').innerHTML = Object.keys(CURRENCY).map(id =>
+    `<div class="w ${id === 'ae' ? 'cur' : ''}"><span>${REGIONS[id].label}</span>${fmtWallet(state.wallets[id], id)}</div>`
+  ).join('');
+
+  const current = state.region || 'any';
+  const options = [['any', 'Любой'], ...Object.entries(REGIONS).map(([id, R]) => [id, R.label])];
+  document.getElementById('regsel').innerHTML = options.map(([id, label]) =>
+    `<button data-act="region" data-id="${id}" class="${current === id ? 'on' : ''}">${label}</button>`
+  ).join('');
+
+  document.getElementById('cur').innerHTML = `
+    ${plateHTML(cur)}
+    <div class="region">${REGIONS[cur.region].label}</div>
+    <div class="tags">${tagsHTML(cur.tags)}<span class="tag">${cur.num.length} цифр</span></div>
+    <div class="price">${fmtCur(cur.price, cur.region)}</div>
+    <div class="sellprice">Продажа: ${fmtCur(Math.round(cur.price * SELL), cur.region)}</div>`;
+
+  document.getElementById('boostinfo').textContent =
+    state.boost > 0 ? `Буст активен: осталось бросков ${state.boost}` : '';
+  document.getElementById('skipbtn').textContent = `Пропустить · ${fmtWallet(skipFee(cur), cur.region)}`;
+
+  document.getElementById('count').textContent = `${state.saved.length} / ${LIMIT}`;
+  document.getElementById('saved').innerHTML = state.saved.length
+    ? state.saved.map((p, i) => `
+        <div class="card">
+          ${plateHTML(p)}
+          <div class="region">${REGIONS[p.region].label}</div>
+          <div class="tags">${tagsHTML(p.tags)}</div>
+          <div class="row">
+            <span class="price" style="font-size:24px">${fmtCur(p.price, p.region)}</span>
+            <button data-act="sellSaved" data-i="${i}">Продать за ${fmtCur(Math.round(p.price * SELL), p.region)}</button>
+          </div>
+        </div>`).join('')
+    : '<div class="empty">Пока пусто. Сохраняйте номера, чтобы они появились здесь.</div>';
+
+  const payCur = state.payCur || 'ae';
+  document.getElementById('paysel').innerHTML = Object.keys(CURRENCY).map(id =>
+    `<button data-act="paycur" data-id="${id}" class="${payCur === id ? 'on' : ''}">${CURRENCY[id].code}</button>`
+  ).join('');
+
+  const boostCost = Math.round(BOOST.cost * CURRENCY[payCur].rate);
+  const boostHTML = `
+    <div class="car boost">
+      <div>
+        <div>Буст удачи</div>
+        <div class="meta">${fmtWallet(boostCost, payCur)} · +${BOOST.rolls} бросков с повышенной редкостью</div>
+      </div>
+      <button data-act="boost" ${state.wallets[payCur] >= boostCost ? '' : 'disabled'}>Купить</button>
+    </div>`;
+
+  const carsHTML = CARS.map(c => {
+    const cost = Math.round(c.price * CURRENCY[payCur].rate);
+    const can = state.wallets[payCur] >= cost;
+    return `
+    <div class="car">
+      <div>
+        <div>${c.name}</div>
+        <div class="meta">${fmtWallet(cost, payCur)} · в гараже: <b>${state.cars[c.id] || 0}</b></div>
+      </div>
+      <button data-act="buy" data-id="${c.id}" ${can ? '' : 'disabled'}>Купить</button>
+    </div>`;
+  }).join('');
+
+  document.getElementById('garage').innerHTML = boostHTML + carsHTML;
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn || btn.disabled) return;
+  const act = btn.dataset.act;
+
+  if (act === 'save') {
+    if (state.saved.length >= LIMIT) { toast('Коллекция заполнена'); return; }
+    state.saved.push(cur);
+    cur = roll();
+    toast('Номер сохранён');
+  } else if (act === 'sell') {
+    const gain = Math.round(cur.price * SELL * CURRENCY[cur.region].rate);
+    state.wallets[cur.region] += gain;
+    toast('Продано за ' + fmtWallet(gain, cur.region));
+    cur = roll();
+  } else if (act === 'skip') {
+    const fee = skipFee(cur);
+    if (state.wallets[cur.region] < fee) { toast('Не хватает денег на пропуск'); return; }
+    state.wallets[cur.region] -= fee;
+    toast('Пропуск: −' + fmtWallet(fee, cur.region));
+    cur = roll();
+  } else if (act === 'sellSaved') {
+    const i = +btn.dataset.i;
+    const p = state.saved[i];
+    if (!p) return;
+    const gain = Math.round(p.price * SELL * CURRENCY[p.region].rate);
+    state.wallets[p.region] += gain;
+    state.saved.splice(i, 1);
+    toast('Продано за ' + fmtWallet(gain, p.region));
+  } else if (act === 'paycur') {
+    state.payCur = btn.dataset.id;
+  } else if (act === 'boost') {
+    const pc = state.payCur || 'ae';
+    const cost = Math.round(BOOST.cost * CURRENCY[pc].rate);
+    if (state.wallets[pc] < cost) { toast('Не хватает денег в ' + CURRENCY[pc].code); return; }
+    state.wallets[pc] -= cost;
+    state.boost = (state.boost || 0) + BOOST.rolls;
+    toast('Буст куплен: +' + BOOST.rolls + ' бросков');
+  } else if (act === 'buy') {
+    const car = CARS.find(c => c.id === btn.dataset.id);
+    if (!car) return;
+    const pc = state.payCur || 'ae';
+    const cost = Math.round(car.price * CURRENCY[pc].rate);
+    if (state.wallets[pc] < cost) { toast('Не хватает денег в ' + CURRENCY[pc].code); return; }
+    state.wallets[pc] -= cost;
+    state.cars[car.id] = (state.cars[car.id] || 0) + 1;
+    toast('Куплен: ' + car.name);
+  } else if (act === 'region') {
+    state.region = btn.dataset.id;
+    cur = roll();
+  } else if (act === 'reset') {
+    if (!confirm('Сбросить кошельки, коллекцию, гараж и буст?')) return;
+    state = freshState();
+    cur = roll();
+  }
+
+  persist();
+  renderAll();
+});
+
+renderAll();
+</script>
+</body>
+</html>
