@@ -33,6 +33,7 @@ h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;marg
 .tag.hit{border-color:var(--brass);color:var(--brass)}
 .price{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;color:var(--brass);line-height:1}
 .sellprice{color:var(--muted);font-size:14px;margin-top:-8px}
+.boostinfo{color:var(--brass);font-size:14px;min-height:20px}
 .actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 button{font:inherit;font-size:15px;padding:11px 18px;border-radius:8px;border:1px solid var(--line);background:var(--ink);color:var(--text);cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 button.primary{background:var(--brass);color:#16130A;border-color:var(--brass);font-weight:500}
@@ -52,6 +53,7 @@ button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 .car{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;flex-wrap:wrap}
 .car .meta{color:var(--muted);font-size:14px}
 .car .meta b{color:var(--text);font-weight:500}
+.car.boost{border-color:var(--brass)}
 .foot{margin-top:40px;color:var(--muted);font-size:13px;line-height:1.6;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--brass);color:#16130A;padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;font-size:14px;max-width:90vw}
 .toast.show{opacity:1}
@@ -91,18 +93,19 @@ button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
   <section class="panel" aria-live="polite">
     <div class="regsel" id="regsel"></div>
     <div id="cur"></div>
+    <div class="boostinfo" id="boostinfo"></div>
     <div class="actions">
       <button class="primary" data-act="save">Сохранить</button>
       <button data-act="sell">Продать</button>
-      <button data-act="skip">Пропустить</button>
+      <button data-act="skip" id="skipbtn">Пропустить</button>
     </div>
-    <div class="legend">Каждый регион со своей валютой. Курсы условные: 1 AED = 25 ₽ = 130 ₸ = 11 ₴.<br>Регион влияет на цену: ОАЭ ×1.5, Россия ×1, Казахстан ×0.9, Украина ×0.8.</div>
+    <div class="legend">Курсы условные: 1 AED = 25 ₽ = 130 ₸ = 11 ₴.<br>Продажа: 80% цены. Пропуск: 10% цены. Регион влияет на цену: ОАЭ ×1.5, Россия ×1, Казахстан ×0.9, Украина ×0.8.</div>
   </section>
 
   <h2>Коллекция <span class="empty" id="count"></span></h2>
   <div class="grid" id="saved"></div>
 
-  <h2>Гараж</h2>
+  <h2>Гараж и бусты</h2>
   <div class="empty">Списать покупку с кошелька:</div>
   <div class="regsel" id="paysel" style="margin-top:8px"></div>
   <div class="garage" id="garage"></div>
@@ -115,11 +118,13 @@ button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 <div class="toast" id="toast" role="status"></div>
 
 <script>
-const SELL = 0.7;
+const SELL = 0.8;        // продажа: 80% цены
+const SKIP_FEE = 0.1;    // пропуск стоит 10% цены номера
 const LIMIT = 20;
-const KEY = 'dubaiPlates.game.v3';
+const KEY = 'dubaiPlates.game.v4';
 const START_AED = 50000;
-const BASE = {1: 1000000, 2: 300000, 3: 90000, 4: 30000, 5: 8000};
+const BOOST = {cost: 600, rolls: 10, mult: 3};   // буст: на 10 бросков редкие шансы x3
+const BASE = {1: 30000, 2: 9000, 3: 2800, 4: 900, 5: 250};
 const MULT = {repeat: 3, seq: 2.2, pal: 1.8, round: 1.6};
 const NAMES = {repeat: 'Повтор', seq: 'Цепочка', pal: 'Палиндром', round: 'Круглое'};
 
@@ -148,12 +153,12 @@ const CARS = [
   {id: 'sf90', name: 'Ferrari SF90 Stradale', price: 2200000}
 ];
 
-// Шансы: чем короче номер и чем больше шанс паттерна, тем реже выпадение
+// Шансы: короткие номера стали реже (1 цифра 1%, 2–3 цифры 5%)
 const TIERS = [
-  {w: 0.70, n: [4, 5], pattern: false},
-  {w: 0.20, n: [3, 4, 5], pattern: true},
-  {w: 0.08, n: [2, 3], pattern: true},
-  {w: 0.02, n: [1, 2], pattern: true}
+  {w: 0.78, n: [4, 5], pattern: false},
+  {w: 0.16, n: [3, 4, 5], pattern: true},
+  {w: 0.05, n: [2, 3], pattern: true},
+  {w: 0.01, n: [1, 2], pattern: true}
 ];
 
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
@@ -169,6 +174,8 @@ const fmtCur = (aed, regionId) => {
 };
 // Сумма, уже хранящаяся в валюте региона
 const fmtWallet = (amount, regionId) => amount.toLocaleString('ru-RU') + ' ' + CURRENCY[regionId].sym;
+// Комиссия за пропуск в валюте региона номера
+const skipFee = p => Math.round(p.price * SKIP_FEE * CURRENCY[p.region].rate);
 
 function gen(n, style) {
   if (n === 1) return firstDigit();
@@ -208,10 +215,10 @@ function classify(s) {
   return tags;
 }
 
-// Цена в AED (базовая единица для всех регионов)
+// Цена в AED (базовая единица для всех регионов), округление до 10 AED
 function priceOf(s, tags, regionMult) {
   const mult = tags.length ? Math.max(...tags.map(t => MULT[t])) : 1;
-  return Math.round(BASE[s.length] * mult * regionMult / 1000) * 1000;
+  return Math.round(BASE[s.length] * mult * regionMult / 10) * 10;
 }
 
 function pickRegion() {
@@ -239,10 +246,23 @@ function formatPlate(regionId, num) {
   return {main, side};
 }
 
+// Веса тиров: с активным бустом редкие тиры (индексы 2 и 3) усиливаются
+function tierWeights() {
+  const boosted = (state.boost || 0) > 0;
+  return TIERS.map((t, i) => (boosted && i >= 2 ? t.w * BOOST.mult : t.w));
+}
+
 function roll() {
-  const r = Math.random();
-  let acc = 0, tier = TIERS[0];
-  for (const t of TIERS) { acc += t.w; if (r < acc) { tier = t; break; } }
+  const ws = tierWeights();
+  const sum = ws.reduce((a, b) => a + b, 0);
+  let r = Math.random() * sum;
+  let tier = TIERS[0];
+  for (let i = 0; i < TIERS.length; i++) {
+    r -= ws[i];
+    if (r < 0) { tier = TIERS[i]; break; }
+  }
+  if ((state.boost || 0) > 0) state.boost -= 1;
+
   const n = pick(tier.n);
   const num = gen(n, tier.pattern ? pick(['repeat', 'seq', 'pal', 'round']) : 'plain');
   const tags = classify(num);
@@ -255,12 +275,16 @@ function startWallets() {
   return Object.fromEntries(Object.entries(CURRENCY).map(([id, c]) => [id, Math.round(START_AED * c.rate)]));
 }
 
+function freshState() {
+  return {wallets: startWallets(), saved: [], cars: {}, region: 'any', payCur: 'ae', boost: 0};
+}
+
 function load() {
   try {
     const v = JSON.parse(localStorage.getItem(KEY));
     if (v && v.wallets) return v;
   } catch (e) {}
-  return {wallets: startWallets(), saved: [], cars: {}, region: 'any', payCur: 'ae'};
+  return freshState();
 }
 function persist() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -272,121 +296,4 @@ let cur = roll();
 const plateHTML = p => `
   <div class="plate" aria-label="${REGIONS[p.region].label}: ${p.main} ${p.side}">
     <div class="main">${p.main}</div>
-    <div class="side ${p.region}">${p.side}</div>
-  </div>`;
-const tagsHTML = tags => (tags.length
-  ? tags.map(t => `<span class="tag hit">${NAMES[t]}</span>`).join('')
-  : '<span class="tag">Без особенностей</span>');
-
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove('show'), 1800);
-}
-
-function renderAll() {
-  document.getElementById('wallets').innerHTML = Object.keys(CURRENCY).map(id =>
-    `<div class="w ${id === 'ae' ? 'cur' : ''}"><span>${REGIONS[id].label}</span>${fmtWallet(state.wallets[id], id)}</div>`
-  ).join('');
-
-  const current = state.region || 'any';
-  const options = [['any', 'Любой'], ...Object.entries(REGIONS).map(([id, R]) => [id, R.label])];
-  document.getElementById('regsel').innerHTML = options.map(([id, label]) =>
-    `<button data-act="region" data-id="${id}" class="${current === id ? 'on' : ''}">${label}</button>`
-  ).join('');
-
-  document.getElementById('cur').innerHTML = `
-    ${plateHTML(cur)}
-    <div class="region">${REGIONS[cur.region].label}</div>
-    <div class="tags">${tagsHTML(cur.tags)}<span class="tag">${cur.num.length} цифр</span></div>
-    <div class="price">${fmtCur(cur.price, cur.region)}</div>
-    <div class="sellprice">Продажа: ${fmtCur(Math.round(cur.price * SELL), cur.region)}</div>`;
-
-  document.getElementById('count').textContent = `${state.saved.length} / ${LIMIT}`;
-  document.getElementById('saved').innerHTML = state.saved.length
-    ? state.saved.map((p, i) => `
-        <div class="card">
-          ${plateHTML(p)}
-          <div class="region">${REGIONS[p.region].label}</div>
-          <div class="tags">${tagsHTML(p.tags)}</div>
-          <div class="row">
-            <span class="price" style="font-size:24px">${fmtCur(p.price, p.region)}</span>
-            <button data-act="sellSaved" data-i="${i}">Продать за ${fmtCur(Math.round(p.price * SELL), p.region)}</button>
-          </div>
-        </div>`).join('')
-    : '<div class="empty">Пока пусто. Сохраняйте номера, чтобы они появились здесь.</div>';
-
-  const payCur = state.payCur || 'ae';
-  document.getElementById('paysel').innerHTML = Object.keys(CURRENCY).map(id =>
-    `<button data-act="paycur" data-id="${id}" class="${payCur === id ? 'on' : ''}">${CURRENCY[id].code}</button>`
-  ).join('');
-
-  document.getElementById('garage').innerHTML = CARS.map(c => {
-    const cost = Math.round(c.price * CURRENCY[payCur].rate);
-    const can = state.wallets[payCur] >= cost;
-    return `
-    <div class="car">
-      <div>
-        <div>${c.name}</div>
-        <div class="meta">${fmtWallet(cost, payCur)} · в гараже: <b>${state.cars[c.id] || 0}</b></div>
-      </div>
-      <button data-act="buy" data-id="${c.id}" ${can ? '' : 'disabled'}>Купить</button>
-    </div>`;
-  }).join('');
-}
-
-document.addEventListener('click', e => {
-  const btn = e.target.closest('[data-act]');
-  if (!btn) return;
-  const act = btn.dataset.act;
-
-  if (act === 'save') {
-    if (state.saved.length >= LIMIT) { toast('Коллекция заполнена'); return; }
-    state.saved.push(cur);
-    cur = roll();
-    toast('Номер сохранён');
-  } else if (act === 'sell') {
-    const gain = Math.round(cur.price * SELL * CURRENCY[cur.region].rate);
-    state.wallets[cur.region] += gain;
-    toast('Продано за ' + fmtWallet(gain, cur.region));
-    cur = roll();
-  } else if (act === 'skip') {
-    cur = roll();
-  } else if (act === 'sellSaved') {
-    const i = +btn.dataset.i;
-    const p = state.saved[i];
-    if (!p) return;
-    const gain = Math.round(p.price * SELL * CURRENCY[p.region].rate);
-    state.wallets[p.region] += gain;
-    state.saved.splice(i, 1);
-    toast('Продано за ' + fmtWallet(gain, p.region));
-  } else if (act === 'paycur') {
-    state.payCur = btn.dataset.id;
-  } else if (act === 'buy') {
-    const car = CARS.find(c => c.id === btn.dataset.id);
-    if (!car) return;
-    const pc = state.payCur || 'ae';
-    const cost = Math.round(car.price * CURRENCY[pc].rate);
-    if (state.wallets[pc] < cost) { toast('Не хватает денег в ' + CURRENCY[pc].code); return; }
-    state.wallets[pc] -= cost;
-    state.cars[car.id] = (state.cars[car.id] || 0) + 1;
-    toast('Куплен: ' + car.name);
-  } else if (act === 'region') {
-    state.region = btn.dataset.id;
-    cur = roll();
-  } else if (act === 'reset') {
-    if (!confirm('Сбросить кошельки, коллекцию и гараж?')) return;
-    state = {wallets: startWallets(), saved: [], cars: {}, region: 'any', payCur: 'ae'};
-    cur = roll();
-  }
-
-  persist();
-  renderAll();
-});
-
-renderAll();
-</script>
-</body>
-</html>
+    <div class="side
