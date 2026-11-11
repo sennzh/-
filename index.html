@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Автономера: игра</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0E1116;--ink2:#171B22;--line:#2A303B;--text:#E9E7E1;--muted:#8D94A3;--plate:#EFEFE8;--brass:#D4A94B}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;min-height:100vh;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+main{max-width:960px;margin:0 auto;padding:32px 20px 56px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:16px;margin-bottom:28px}
+h1{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:clamp(40px,7vw,64px);line-height:.92;margin:0}
+.wallets{text-align:right;display:grid;gap:2px}
+.wallets .w{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:var(--brass);line-height:1.15}
+.wallets .w.cur{font-size:26px}
+.wallets .w span{font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--muted);font-weight:400;margin-right:6px}
+h2{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;margin:40px 0 14px}
+.panel{background:var(--ink2);border:1px solid var(--line);border-radius:14px;padding:24px;display:grid;gap:18px;justify-items:center;text-align:center}
+.plate{background:var(--plate);color:#111;border:3px solid #111;border-radius:6px;display:flex;height:96px;min-width:min(100%,380px);overflow:hidden}
+.plate .main{flex:1;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:clamp(34px,11vw,58px);letter-spacing:.05em;white-space:nowrap;padding:0 8px}
+.plate .side{display:flex;align-items:center;justify-content:center;min-width:64px;padding:0 10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:30px;color:#fff;background:#1E4C9A}
+.plate .side.ae{background:#0B0B0B;color:var(--brass)}
+.plate .side.kz{background:#00AFCA}
+.plate .side.ua{background:#0057B7;color:#FFD700}
+.plate .side.ru{background:#1E4C9A}
+.region{font-size:13px;color:var(--muted)}
+.tags{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.tag{font-size:12px;padding:3px 9px;border:1px solid var(--line);border-radius:999px;color:var(--muted)}
+.tag.hit{border-color:var(--brass);color:var(--brass)}
+.price{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:34px;color:var(--brass);line-height:1}
+.sellprice{color:var(--muted);font-size:14px;margin-top:-8px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+button{font:inherit;font-size:15px;padding:11px 18px;border-radius:8px;border:1px solid var(--line);background:var(--ink);color:var(--text);cursor:pointer;min-height:44px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button.primary{background:var(--brass);color:#16130A;border-color:var(--brass);font-weight:500}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+.legend{color:var(--muted);font-size:13px;margin-top:12px;text-align:center;line-height:1.6}
+.regsel{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.regsel button.on{border-color:var(--brass);color:var(--brass)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.card{background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:12px}
+.card .plate{height:72px;min-width:0}
+.card .plate .main{font-size:40px}
+.card .plate .side{font-size:22px;min-width:52px}
+.card .row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.empty{color:var(--muted);font-size:14px}
+.garage{display:grid;gap:10px;margin-top:14px}
+.car{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;flex-wrap:wrap}
+.car .meta{color:var(--muted);font-size:14px}
+.car .meta b{color:var(--text);font-weight:500}
+.foot{margin-top:40px;color:var(--muted);font-size:13px;line-height:1.6;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--brass);color:#16130A;padding:10px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;font-size:14px;max-width:90vw}
+.toast.show{opacity:1}
+@media (max-width:560px){
+  main{padding:20px 14px 40px}
+  header{flex-direction:column;align-items:flex-start;gap:10px;margin-bottom:20px}
+  .wallets{text-align:left}
+  .wallets .w{font-size:20px}
+  .wallets .w.cur{font-size:22px}
+  h1{font-size:44px}
+  h2{font-size:22px;margin:28px 0 12px}
+  .panel{padding:16px 12px;gap:14px}
+  .regsel{gap:6px}
+  .regsel button{padding:8px 12px;font-size:14px;min-height:40px}
+  .actions{width:100%}
+  .actions button{flex:1 1 30%;padding:12px 8px;font-size:14px}
+  .price{font-size:30px}
+  .card .plate .main{font-size:28px}
+  .card .plate .side{font-size:18px;min-width:44px}
+  .card .plate{height:64px}
+  .car{flex-direction:column;align-items:stretch}
+  .car button{width:100%}
+  .foot{flex-direction:column;align-items:stretch}
+  .foot button{width:100%}
+  .toast{bottom:16px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Автономера</h1>
+    <div class="wallets" id="wallets"></div>
+  </header>
+
+  <section class="panel" aria-live="polite">
+    <div class="regsel" id="regsel"></div>
+    <div id="cur"></div>
+    <div class="actions">
+      <button class="primary" data-act="save">Сохранить</button>
+      <button data-act="sell">Продать</button>
+      <button data-act="skip">Пропустить</button>
+    </div>
+    <div class="legend">Каждый регион со своей валютой. Курсы условные: 1 AED = 25 ₽ = 130 ₸ = 11 ₴.<br>Регион влияет на цену: ОАЭ ×1.5, Россия ×1, Казахстан ×0.9, Украина ×0.8.</div>
+  </section>
+
+  <h2>Коллекция <span class="empty" id="count"></span></h2>
+  <div class="grid" id="saved"></div>
+
+  <h2>Гараж</h2>
+  <div class="empty">Списать покупку с кошелька:</div>
+  <div class="regsel" id="paysel" style="margin-top:8px"></div>
+  <div class="garage" id="garage"></div>
+
+  <div class="foot">
+    <span>Кошельки и покупки хранятся только в этом браузере и не являются реальными деньгами. Названия моделей и регионы даны для игры.</span>
+    <button data-act="reset">Сбросить прогресс</button>
+  </div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const SELL = 0.7;
+const LIMIT = 20;
+const KEY = 'dubaiPlates.game.v3';
+const START_AED = 50000;
+const BASE = {1: 1000000, 2: 300000, 3: 90000, 4: 30000, 5: 8000};
+const MULT = {repeat: 3, seq: 2.2, pal: 1.8, round: 1.6};
+const NAMES = {repeat: 'Повтор', seq: 'Цепочка', pal: 'Палиндром', round: 'Круглое'};
+
+const REGIONS = {
+  ru: {label: 'Россия', mult: 1.0, weight: 0.40, letters: 'АВЕКМНОРСТУХ', side: ['77', '78', '50', '16', '02']},
+  kz: {label: 'Казахстан', mult: 0.9, weight: 0.25, letters: 'ABEKMHOPCTXY', side: ['02', '01', '19', '12']},
+  ua: {label: 'Украина', mult: 0.8, weight: 0.15, letters: 'ABCEHIKMOPTX', side: ['UA']},
+  ae: {label: 'ОАЭ (Дубай)', mult: 1.5, weight: 0.20, letters: 'ABCDEFGHJKLMNOPQRSTUVWXYZ', side: ['DXB']}
+};
+
+// Валюта каждого региона. rate: сколько единиц валюты в 1 AED (условный курс)
+const CURRENCY = {
+  ru: {code: 'RUB', sym: '₽', rate: 25},
+  kz: {code: 'KZT', sym: '₸', rate: 130},
+  ua: {code: 'UAH', sym: '₴', rate: 11},
+  ae: {code: 'AED', sym: 'AED', rate: 1}
+};
+
+const CARS = [
+  {id: 'granta', name: 'Lada Granta', price: 45000},
+  {id: 'solaris', name: 'Hyundai Solaris', price: 70000},
+  {id: 'camry', name: 'Toyota Camry', price: 130000},
+  {id: 'x5', name: 'BMW X5', price: 330000},
+  {id: 'gclass', name: 'Mercedes-Benz G-Class', price: 700000},
+  {id: 'urus', name: 'Lamborghini Urus', price: 1100000},
+  {id: 'sf90', name: 'Ferrari SF90 Stradale', price: 2200000}
+];
+
+// Шансы: чем короче номер и чем больше шанс паттерна, тем реже выпадение
+const TIERS = [
+  {w: 0.70, n: [4, 5], pattern: false},
+  {w: 0.20, n: [3, 4, 5], pattern: true},
+  {w: 0.08, n: [2, 3], pattern: true},
+  {w: 0.02, n: [1, 2], pattern: true}
+];
+
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = arr => arr[rnd(0, arr.length - 1)];
+const digits = n => Array.from({length: n}, () => rnd(0, 9)).join('');
+const firstDigit = () => String(rnd(1, 9));
+const letter = set => pick([...set]);
+
+// Сумма в AED -> строка в валюте региона
+const fmtCur = (aed, regionId) => {
+  const c = CURRENCY[regionId];
+  return Math.round(aed * c.rate).toLocaleString('ru-RU') + ' ' + c.sym;
+};
+// Сумма, уже хранящаяся в валюте региона
+const fmtWallet = (amount, regionId) => amount.toLocaleString('ru-RU') + ' ' + CURRENCY[regionId].sym;
+
+function gen(n, style) {
+  if (n === 1) return firstDigit();
+  switch (style) {
+    case 'repeat': return String(rnd(1, 9)).repeat(n);
+    case 'seq': {
+      if (Math.random() < 0.5) {
+        const s = rnd(1, 10 - n);
+        return Array.from({length: n}, (_, i) => s + i).join('');
+      }
+      const d = rnd(n - 1, 9);
+      return Array.from({length: n}, (_, i) => d - i).join('');
+    }
+    case 'pal': {
+      const h = Math.ceil(n / 2);
+      const a = firstDigit() + digits(h - 1);
+      return a + a.slice(0, n - h).split('').reverse().join('');
+    }
+    case 'round': {
+      const z = n >= 3 ? rnd(2, Math.min(3, n - 1)) : 1;
+      return firstDigit() + digits(n - z - 1) + '0'.repeat(z);
+    }
+    default: return firstDigit() + digits(n - 1);
+  }
+}
+
+function classify(s) {
+  const tags = [];
+  const n = s.length;
+  if (n > 1 && [...s].every(c => c === s[0])) tags.push('repeat');
+  if (n >= 3) {
+    const step = +s[1] - +s[0];
+    if (Math.abs(step) === 1 && [...s].every((c, i) => i === 0 || +c - +s[i - 1] === step)) tags.push('seq');
+    if (s === [...s].reverse().join('')) tags.push('pal');
+  }
+  if (n >= 2 && s.endsWith('00')) tags.push('round');
+  return tags;
+}
+
+// Цена в AED (базовая единица для всех регионов)
+function priceOf(s, tags, regionMult) {
+  const mult = tags.length ? Math.max(...tags.map(t => MULT[t])) : 1;
+  return Math.round(BASE[s.length] * mult * regionMult / 1000) * 1000;
+}
+
+function pickRegion() {
+  if (state.region && state.region !== 'any') return state.region;
+  const r = Math.random();
+  let acc = 0;
+  for (const [id, R] of Object.entries(REGIONS)) {
+    acc += R.weight;
+    if (r < acc) return id;
+  }
+  return 'ru';
+}
+
+function formatPlate(regionId, num) {
+  const R = REGIONS[regionId];
+  const L = () => letter(R.letters);
+  const side = pick(R.side);
+  let main;
+  switch (regionId) {
+    case 'ru': main = `${L()}${num}${L()}${L()}`; break;
+    case 'kz': main = `${num} ${L()}${L()}${L()}`; break;
+    case 'ua': main = `${L()}${L()} ${num} ${L()}${L()}`; break;
+    default:   main = `${L()} ${num}`;
+  }
+  return {main, side};
+}
+
+function roll() {
+  const r = Math.random();
+  let acc = 0, tier = TIERS[0];
+  for (const t of TIERS) { acc += t.w; if (r < acc) { tier = t; break; } }
+  const n = pick(tier.n);
+  const num = gen(n, tier.pattern ? pick(['repeat', 'seq', 'pal', 'round']) : 'plain');
+  const tags = classify(num);
+  const region = pickRegion();
+  const {main, side} = formatPlate(region, num);
+  return {region, main, side, num, tags, price: priceOf(num, tags, REGIONS[region].mult)};
+}
+
+function startWallets() {
+  return Object.fromEntries(Object.entries(CURRENCY).map(([id, c]) => [id, Math.round(START_AED * c.rate)]));
+}
+
+function load() {
+  try {
+    const v = JSON.parse(localStorage.getItem(KEY));
+    if (v && v.wallets) return v;
+  } catch (e) {}
+  return {wallets: startWallets(), saved: [], cars: {}, region: 'any', payCur: 'ae'};
+}
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+let state = load();
+let cur = roll();
+
+const plateHTML = p => `
+  <div class="plate" aria-label="${REGIONS[p.region].label}: ${p.main} ${p.side}">
+    <div class="main">${p.main}</div>
+    <div class="side ${p.region}">${p.side}</div>
+  </div>`;
+const tagsHTML = tags => (tags.length
+  ? tags.map(t => `<span class="tag hit">${NAMES[t]}</span>`).join('')
+  : '<span class="tag">Без особенностей</span>');
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function renderAll() {
+  document.getElementById('wallets').innerHTML = Object.keys(CURRENCY).map(id =>
+    `<div class="w ${id === 'ae' ? 'cur' : ''}"><span>${REGIONS[id].label}</span>${fmtWallet(state.wallets[id], id)}</div>`
+  ).join('');
+
+  const current = state.region || 'any';
+  const options = [['any', 'Любой'], ...Object.entries(REGIONS).map(([id, R]) => [id, R.label])];
+  document.getElementById('regsel').innerHTML = options.map(([id, label]) =>
+    `<button data-act="region" data-id="${id}" class="${current === id ? 'on' : ''}">${label}</button>`
+  ).join('');
+
+  document.getElementById('cur').innerHTML = `
+    ${plateHTML(cur)}
+    <div class="region">${REGIONS[cur.region].label}</div>
+    <div class="tags">${tagsHTML(cur.tags)}<span class="tag">${cur.num.length} цифр</span></div>
+    <div class="price">${fmtCur(cur.price, cur.region)}</div>
+    <div class="sellprice">Продажа: ${fmtCur(Math.round(cur.price * SELL), cur.region)}</div>`;
+
+  document.getElementById('count').textContent = `${state.saved.length} / ${LIMIT}`;
+  document.getElementById('saved').innerHTML = state.saved.length
+    ? state.saved.map((p, i) => `
+        <div class="card">
+          ${plateHTML(p)}
+          <div class="region">${REGIONS[p.region].label}</div>
+          <div class="tags">${tagsHTML(p.tags)}</div>
+          <div class="row">
+            <span class="price" style="font-size:24px">${fmtCur(p.price, p.region)}</span>
+            <button data-act="sellSaved" data-i="${i}">Продать за ${fmtCur(Math.round(p.price * SELL), p.region)}</button>
+          </div>
+        </div>`).join('')
+    : '<div class="empty">Пока пусто. Сохраняйте номера, чтобы они появились здесь.</div>';
+
+  const payCur = state.payCur || 'ae';
+  document.getElementById('paysel').innerHTML = Object.keys(CURRENCY).map(id =>
+    `<button data-act="paycur" data-id="${id}" class="${payCur === id ? 'on' : ''}">${CURRENCY[id].code}</button>`
+  ).join('');
+
+  document.getElementById('garage').innerHTML = CARS.map(c => {
+    const cost = Math.round(c.price * CURRENCY[payCur].rate);
+    const can = state.wallets[payCur] >= cost;
+    return `
+    <div class="car">
+      <div>
+        <div>${c.name}</div>
+        <div class="meta">${fmtWallet(cost, payCur)} · в гараже: <b>${state.cars[c.id] || 0}</b></div>
+      </div>
+      <button data-act="buy" data-id="${c.id}" ${can ? '' : 'disabled'}>Купить</button>
+    </div>`;
+  }).join('');
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const act = btn.dataset.act;
+
+  if (act === 'save') {
+    if (state.saved.length >= LIMIT) { toast('Коллекция заполнена'); return; }
+    state.saved.push(cur);
+    cur = roll();
+    toast('Номер сохранён');
+  } else if (act === 'sell') {
+    const gain = Math.round(cur.price * SELL * CURRENCY[cur.region].rate);
+    state.wallets[cur.region] += gain;
+    toast('Продано за ' + fmtWallet(gain, cur.region));
+    cur = roll();
+  } else if (act === 'skip') {
+    cur = roll();
+  } else if (act === 'sellSaved') {
+    const i = +btn.dataset.i;
+    const p = state.saved[i];
+    if (!p) return;
+    const gain = Math.round(p.price * SELL * CURRENCY[p.region].rate);
+    state.wallets[p.region] += gain;
+    state.saved.splice(i, 1);
+    toast('Продано за ' + fmtWallet(gain, p.region));
+  } else if (act === 'paycur') {
+    state.payCur = btn.dataset.id;
+  } else if (act === 'buy') {
+    const car = CARS.find(c => c.id === btn.dataset.id);
+    if (!car) return;
+    const pc = state.payCur || 'ae';
+    const cost = Math.round(car.price * CURRENCY[pc].rate);
+    if (state.wallets[pc] < cost) { toast('Не хватает денег в ' + CURRENCY[pc].code); return; }
+    state.wallets[pc] -= cost;
+    state.cars[car.id] = (state.cars[car.id] || 0) + 1;
+    toast('Куплен: ' + car.name);
+  } else if (act === 'region') {
+    state.region = btn.dataset.id;
+    cur = roll();
+  } else if (act === 'reset') {
+    if (!confirm('Сбросить кошельки, коллекцию и гараж?')) return;
+    state = {wallets: startWallets(), saved: [], cars: {}, region: 'any', payCur: 'ae'};
+    cur = roll();
+  }
+
+  persist();
+  renderAll();
+});
+
+renderAll();
+</script>
+</body>
+</html>
